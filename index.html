@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PaceCraft — Race Time Predictor Calculator & Printable Pace Band Generator</title>
+<meta name="description" content="PaceCraft is a free race time predictor calculator with distance-specific Riegel exponents, altitude adjustment, a negative-split planner, and a printable pace band generator with wristband print sheet. Unlimited free usage, no signup.">
+<meta name="keywords" content="race time predictor calculator, printable pace band generator, marathon pace band calculator, riegel formula calculator, negative split planner, altitude adjusted race prediction, race pace calculator">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: { ink: '#0B0B10', track: '#14141B', blood: '#EF4444', gold: '#FACC15', ash: '#9CA3AF' },
+      fontFamily: { mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','monospace'] }
+    }
+  }
+}
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { background: #0B0B10; color: #F3F4F6; -webkit-font-smoothing: antialiased; }
+  .checker { background-image:
+    repeating-conic-gradient(#FACC15 0% 25%, #0B0B10 0% 50%);
+    background-size: 22px 22px; }
+  .checker-sm { background-size: 14px 14px; }
+  .lane { background-image: repeating-linear-gradient(90deg, transparent 0 118px, rgba(250,204,21,.16) 118px 122px); }
+  .hazard { background: repeating-linear-gradient(-45deg, #EF4444 0 14px, #0B0B10 14px 28px); }
+  .card { background: #14141B; border: 1px solid #26262e; border-radius: 14px; }
+  .card-red { border-left: 4px solid #EF4444; }
+  .card-gold { border-left: 4px solid #FACC15; }
+  .btn-fire { background: #EF4444; color: #0B0B10; font-weight: 800; border-radius: 10px; transition: transform .12s, box-shadow .12s; }
+  .btn-fire:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(239,68,68,.35); }
+  .btn-gold { background: #FACC15; color: #0B0B10; font-weight: 800; border-radius: 10px; transition: transform .12s, box-shadow .12s; }
+  .btn-gold:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(250,204,21,.30); }
+  .field { background: #0B0B10; border: 1px solid #3a3a44; border-radius: 10px; color: #F3F4F6; padding: .65rem .8rem; width: 100%; }
+  .field:focus { outline: 2px solid #FACC15; border-color: #FACC15; }
+  select.field option { background: #14141B; }
+  label.lbl { display: block; font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: #9CA3AF; margin-bottom: .4rem; font-weight: 700; }
+  .bigtime { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-variant-numeric: tabular-nums; }
+  .tick { color: #FACC15; }
+  details.faq { background: #14141B; border: 1px solid #26262e; border-radius: 12px; }
+  details.faq summary { cursor: pointer; list-style: none; }
+  details.faq summary::-webkit-details-marker { display: none; }
+  details.faq[open] .faq-plus { transform: rotate(45deg); color: #FACC15; }
+  .faq-plus { transition: transform .2s; color: #EF4444; }
+  .sechead { display: flex; align-items: center; gap: .75rem; }
+  .sechead .num { background: #EF4444; color: #0B0B10; font-weight: 900; width: 2rem; height: 2rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .6rem; }
+  /* ------- print: only the wristband sheet survives ------- */
+  .print-only { display: none; }
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    body { background: #fff !important; color: #000 !important; }
+    .bandcard { page-break-inside: avoid; border: 2px solid #000; margin: 0 0 14px 0; }
+    .bandcard table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .bandcard th, .bandcard td { border: 1px solid #000; padding: 3px 6px; text-align: left; }
+    .bandcard th { background: #eee; }
+  }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is the Riegel formula used by this race time predictor calculator?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The Riegel formula predicts a race time with T2 = T1 × (D2/D1)^1.06, where T1 is your recent race time at distance D1 and T2 is the predicted time at distance D2. Peter Riegel published it in 1977 after studying world-record performances, and it remains the most trusted rule of thumb in running because it models how speed decays as distance grows. PaceCraft applies it with distance-specific exponents — 1.04 for 5K and shorter, 1.05 for 10K, 1.06 for the half marathon, 1.07 for the marathon, and up to 1.12 for ultramarathons — because longer races slow runners more than the classic single exponent assumes."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How accurate is a race time prediction from one recent result?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "For trained runners on similar courses and similar conditions, Riegel-based predictions are typically within 2–4% of the actual result for nearby distances — for example predicting a 10K from a 5K. Accuracy falls when you extrapolate far, such as predicting a marathon from a 5K, because endurance, fueling, and muscular fatigue differ across distances. That is why PaceCraft uses steeper exponents for longer targets and lets you correct for altitude: predictions are a realistic starting goal, not a guarantee, and should be sanity-checked against your training volume."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does altitude change my predicted race time?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Above about 1000 meters (3300 feet), thinner air reduces the oxygen available to working muscles, and distance-running performance drops roughly 2–3% for every additional 1000 meters of elevation. PaceCraft applies a 2.4% slowdown per 1000 meters above the 1000-meter threshold. It first converts your recent race to a sea-level equivalent if that race was at altitude, then applies the target race's altitude factor, so both ends of the comparison are handled instead of only one."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is a printable pace band and how do I use it in a race?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A pace band is a small wristband printed with cumulative split times for every kilometer or mile of your race. You cut it out, tape it to your wrist or forearm, and at each mile or kilometer marker you compare your watch to the band: if you are ahead of the printed time you can ease off slightly, and if you are behind you know exactly how much to make up. PaceCraft generates a band for any goal time and distance with an even-pace schedule, and the print stylesheet produces a clean black-and-white wristband sheet that fits a standard page."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is negative-split pacing and why do runners use it?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A negative split means running the second half of a race faster than the first. It is the pacing strategy behind most world records and fast marathons because starting slightly conservatively spares glycogen, keeps core temperature down, and lets you run the late miles strongly while others fade. PaceCraft's negative-split planner defaults to 50.8% of total time for the first half — a classic 1–2% positive-to-negative margin — and shows target paces per kilometer and per mile for each half so you can execute it on race day."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is PaceCraft free to use?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. PaceCraft is completely free with unlimited usage. There is no signup, no paywall, no watermark, and no limit on how many predictions or pace bands you generate. Every calculation runs in your browser, so your race data never leaves your device."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body id="top" class="min-h-screen">
+
+<div id="app" class="no-print">
+
+<!-- ============ STICKY HEADER ============ -->
+<header class="sticky top-0 z-50 border-b border-[#26262e]" style="background:#0B0B10f2">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between">
+    <a href="#top" class="flex items-center gap-2.5">
+      <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="2" y="6" width="36" height="28" rx="4" fill="#0B0B10" stroke="#FACC15" stroke-width="2"/>
+        <g>
+          <rect x="5" y="9" width="7.5" height="7" fill="#FACC15"/><rect x="12.5" y="9" width="7.5" height="7" fill="#0B0B10"/><rect x="20" y="9" width="7.5" height="7" fill="#FACC15"/><rect x="27.5" y="9" width="7.5" height="7" fill="#0B0B10"/>
+          <rect x="5" y="16" width="7.5" height="7" fill="#0B0B10"/><rect x="12.5" y="16" width="7.5" height="7" fill="#FACC15"/><rect x="20" y="16" width="7.5" height="7" fill="#0B0B10"/><rect x="27.5" y="16" width="7.5" height="7" fill="#FACC15"/>
+          <rect x="5" y="23" width="7.5" height="7" fill="#FACC15"/><rect x="12.5" y="23" width="7.5" height="7" fill="#0B0B10"/><rect x="20" y="23" width="7.5" height="7" fill="#FACC15"/><rect x="27.5" y="23" width="7.5" height="7" fill="#0B0B10"/>
+        </g>
+      </svg>
+      <span class="text-2xl font-extrabold tracking-tight">Pace<span class="text-[#EF4444]">Craft</span></span>
+    </a>
+    <nav class="flex items-center gap-5 text-sm font-semibold">
+      <a href="#top" class="text-gray-200 hover:text-[#FACC15]">Home</a>
+      <a href="https://fixoraa.tech" class="text-gray-200 hover:text-[#FACC15]">More Tools</a>
+    </nav>
+  </div>
+  <div class="checker checker-sm h-2 w-full" aria-hidden="true"></div>
+</header>
+
+<!-- TOP AD -->
+<div class="no-print mx-auto max-w-6xl px-4 sm:px-6 pt-4" role="complementary" aria-label="Advertisement">
+  <div class="mx-auto text-center" style="max-width:728px">
+    <span class="block text-[10px] tracking-[0.18em] uppercase text-slate-400 mb-1.5">Advertisement</span>
+    <div class="flex justify-center overflow-hidden">
+      <div class="origin-top scale-[0.44] sm:scale-100 shrink-0">
+        <script>
+          atOptions = { 'key' : '4e68ac77881c17fe128a46565d9a4e8c', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+        </script>
+        <script src="https://www.highrevenueformat.com/4e68ac77881c17fe128a46565d9a4e8c/invoke.js"></script>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6">
+
+  <!-- ============ HERO ============ -->
+  <section class="lane rounded-2xl mt-6 px-6 py-10 sm:px-10 relative overflow-hidden" style="background:#14141B">
+    <div class="absolute inset-x-0 top-0 checker h-3" aria-hidden="true"></div>
+    <div class="pt-4">
+      <span class="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase bg-[#FACC15] text-[#0B0B10] px-3 py-1.5 rounded-full">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2L4.5 13.5H11L9.5 22L19 10h-6.5L13 2z" fill="#0B0B10"/></svg>
+        Unlimited Free Usage
+      </span>
+      <h1 class="text-4xl sm:text-5xl font-black mt-4 leading-tight">Predict your next <span class="text-[#EF4444]">finish line</span>,<br class="hidden sm:block"> then wear it on your wrist.</h1>
+      <p class="text-gray-400 mt-3 max-w-2xl">Turn one recent race into predictions for every distance with the Riegel formula, tune it with distance-specific exponents and altitude correction, plan a negative split, and print a wristband pace band for race day.</p>
+      <div class="flex flex-wrap gap-3 mt-6">
+        <a href="#predictor" class="btn-fire px-6 py-3 text-sm uppercase tracking-wider">Start predicting</a>
+        <a href="#bands" class="btn-gold px-6 py-3 text-sm uppercase tracking-wider">Print pace band</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 1. PREDICTOR ============ -->
+  <section id="predictor" class="mt-10">
+    <div class="sechead">
+      <span class="num">1</span>
+      <h2 class="text-2xl font-extrabold">Race Time Predictor</h2>
+    </div>
+    <p class="text-gray-400 mt-2 text-sm max-w-3xl">Enter a recent race — the fresher and harder the effort, the better. PaceCraft projects it to 9 standard distances using the Riegel formula.</p>
+
+    <div class="grid lg:grid-cols-5 gap-6 mt-5">
+      <div class="card card-red p-6 lg:col-span-2">
+        <label class="lbl" for="race-dist">Recent race distance</label>
+        <select id="race-dist" class="field"></select>
+        <div id="race-dist-custom-wrap" class="mt-3 hidden">
+          <label class="lbl" for="race-dist-custom">Custom distance (meters)</label>
+          <input id="race-dist-custom" type="number" min="100" max="1000000" class="field" placeholder="e.g. 15000">
+        </div>
+        <div class="mt-4">
+          <label class="lbl" for="race-time">Recent race time <span class="normal-case font-normal">(e.g. 24:36 or 1:02:15)</span></label>
+          <input id="race-time" type="text" inputmode="numeric" class="field bigtime text-xl" placeholder="24:36">
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-4">
+          <div>
+            <label class="lbl" for="recent-alt">Recent race altitude</label>
+            <input id="recent-alt" type="number" min="0" max="9000" class="field" value="0">
+          </div>
+          <div>
+            <label class="lbl" for="target-alt">Target race altitude</label>
+            <input id="target-alt" type="number" min="0" max="9000" class="field" value="0">
+          </div>
+        </div>
+        <div class="mt-4">
+          <label class="lbl" for="alt-unit">Altitude unit</label>
+          <select id="alt-unit" class="field">
+            <option value="m" selected>meters</option>
+            <option value="ft">feet</option>
+          </select>
+        </div>
+        <div class="mt-4">
+          <label class="lbl" for="exp-mode">Riegel exponent</label>
+          <select id="exp-mode" class="field">
+            <option value="distance" selected>Distance-specific (recommended)</option>
+            <option value="classic">Classic 1.06 for all</option>
+            <option value="custom">Custom exponent</option>
+          </select>
+        </div>
+        <div id="exp-custom-wrap" class="mt-3 hidden">
+          <label class="lbl" for="exp-custom">Custom exponent (1.00–1.25)</label>
+          <input id="exp-custom" type="number" step="0.01" min="1" max="1.25" class="field" value="1.06">
+        </div>
+        <button id="predict-btn" class="btn-fire w-full mt-6 py-3.5 uppercase tracking-widest text-sm">Predict my times</button>
+        <p id="predict-error" class="text-[#EF4444] text-sm mt-3 hidden" role="alert"></p>
+      </div>
+
+      <div class="lg:col-span-3">
+        <div id="pred-results" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div class="card p-6 text-center text-gray-500 text-sm flex items-center justify-center min-h-[220px]">
+            Your predictions will appear here.<br>Enter a recent race and hit predict.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. NEGATIVE SPLIT ============ -->
+  <section id="splits" class="mt-12">
+    <div class="sechead">
+      <span class="num">2</span>
+      <h2 class="text-2xl font-extrabold">Negative-Split Planner</h2>
+    </div>
+    <p class="text-gray-400 mt-2 text-sm max-w-3xl">Most personal bests are run with the second half faster than the first. Set your goal and PaceCraft gives you first-half and second-half targets to run by.</p>
+
+    <div class="grid lg:grid-cols-5 gap-6 mt-5">
+      <div class="card card-gold p-6 lg:col-span-2">
+        <label class="lbl" for="split-dist">Goal race distance</label>
+        <select id="split-dist" class="field"></select>
+        <div class="mt-4">
+          <label class="lbl" for="split-time">Goal finish time <span class="normal-case font-normal">(e.g. 3:59:59)</span></label>
+          <input id="split-time" type="text" inputmode="numeric" class="field bigtime text-xl" placeholder="3:59:59">
+        </div>
+        <div class="mt-4">
+          <label class="lbl" for="split-pct">First-half share: <span id="split-pct-val" class="text-[#FACC15]">50.8%</span></label>
+          <input id="split-pct" type="range" min="50" max="56" step="0.1" value="50.8" class="w-full accent-[#FACC15]">
+          <p class="text-xs text-gray-500 mt-1">50.8% means the first half is run about 1.6% slower than even pace. Push it higher for a more conservative start.</p>
+        </div>
+        <button id="split-btn" class="btn-gold w-full mt-6 py-3.5 uppercase tracking-widest text-sm">Plan my splits</button>
+        <p id="split-error" class="text-[#EF4444] text-sm mt-3 hidden" role="alert"></p>
+      </div>
+      <div class="lg:col-span-3">
+        <div id="split-results" class="grid sm:grid-cols-2 gap-4">
+          <div class="card p-6 text-center text-gray-500 text-sm flex items-center justify-center min-h-[180px]">
+            Your half-by-half plan will appear here.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. PACE BANDS ============ -->
+  <section id="bands" class="mt-12">
+    <div class="sechead">
+      <span class="num">3</span>
+      <h2 class="text-2xl font-extrabold">Printable Pace Band Generator</h2>
+    </div>
+    <p class="text-gray-400 mt-2 text-sm max-w-3xl">Build a wristband with cumulative splits for every kilometer or mile, then print the black-and-white sheet, cut it out, and tape it to your wrist.</p>
+
+    <div class="card p-6 mt-5">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label class="lbl" for="band-dist">Race distance</label>
+          <select id="band-dist" class="field"></select>
+        </div>
+        <div>
+          <label class="lbl" for="band-time">Goal time <span class="normal-case font-normal">(e.g. 1:45:00)</span></label>
+          <input id="band-time" type="text" inputmode="numeric" class="field bigtime" placeholder="1:45:00">
+        </div>
+        <div>
+          <label class="lbl" for="band-unit">Band unit</label>
+          <select id="band-unit" class="field">
+            <option value="km" selected>Kilometers</option>
+            <option value="mi">Miles</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button id="band-btn" class="btn-fire w-full py-3 uppercase tracking-widest text-sm">Build band</button>
+        </div>
+      </div>
+      <p id="band-error" class="text-[#EF4444] text-sm mt-3 hidden" role="alert"></p>
+      <div id="band-summary" class="hidden mt-6 flex flex-wrap items-center gap-4">
+        <div class="bigtime text-3xl font-black text-[#FACC15]" id="band-goal-label"></div>
+        <div class="text-sm text-gray-400" id="band-pace-label"></div>
+        <button id="print-bands-btn" class="btn-gold px-6 py-3 uppercase tracking-widest text-sm ml-auto">🖨 Print wristbands</button>
+      </div>
+      <div class="overflow-x-auto mt-4">
+        <table id="band-table" class="w-full text-sm hidden">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-widest text-gray-500 border-b border-[#26262e]">
+              <th class="py-2 pr-4">#</th><th class="py-2 pr-4">Distance</th><th class="py-2 pr-4">Split</th><th class="py-2">Elapsed</th>
+            </tr>
+          </thead>
+          <tbody id="band-rows" class="bigtime"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- BOTTOM AD -->
+<div class="no-print mx-auto max-w-6xl px-4 sm:px-6 pb-4" role="complementary" aria-label="Advertisement">
+  <div class="mx-auto text-center" style="max-width:728px">
+    <span class="block text-[10px] tracking-[0.18em] uppercase text-slate-400 mb-1.5">Advertisement</span>
+    <div class="flex justify-center overflow-hidden">
+      <script async src="https://js.wpadmngr.com/static/adManager.js" data-admpid="464498"></script>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SEO ARTICLE ============ -->
+<article id="seo-article" class="mx-auto max-w-4xl px-4 sm:px-6 mt-10 text-gray-300 leading-relaxed">
+  <div class="checker checker-sm h-2 w-full mb-8 rounded" aria-hidden="true"></div>
+  <h2 class="text-3xl font-black text-white">Race Time Predictor Calculator: Turn One Result Into Every Finish Line</h2>
+
+  <p class="mt-5">Every runner has stood at the start line of a new distance wondering the same thing: what time should I actually aim for? A race time predictor calculator answers that question with math instead of guesswork. PaceCraft takes a single recent race result — a 5K you ran last month, a half marathon from the spring — and projects it across nine standard distances, from the mile to the 100K, using the most respected endurance formula in the sport. Then it goes further than a bare prediction: it adjusts for altitude, lets you pick the Riegel exponent that matches your target, builds a negative-split race plan, and generates a printable pace band you can tape to your wrist on race morning.</p>
+
+  <h3 class="text-2xl font-extrabold text-white mt-10">The Riegel formula: the science behind the prediction</h3>
+  <p class="mt-4">In 1977, research engineer and runner Peter Riegel published a deceptively simple equation after analyzing world-record performances across distances: T2 = T1 × (D2/D1)^1.06. In plain language, your predicted time for a new distance equals your known time multiplied by the ratio of the distances raised to the power of 1.06. The exponent captures a biological reality — as races get longer, the pace you can sustain decays. Double the distance and you cannot quite double the time; the 1.06 exponent says you will need about 8.5% more time than a naive doubling would suggest.</p>
+  <p class="mt-4">Why has this formula survived nearly five decades while fancier models came and went? Because it was calibrated on the best human performances ever recorded, and it describes a remarkably stable relationship. For well-trained runners racing on similar terrain in similar conditions, Riegel predictions typically land within 2 to 4 percent of the actual result for nearby distances. Predicting a 10K from a 5K is usually reliable; predicting a marathon from a 5K is a bigger leap, because endurance, glycogen management, and muscular fatigue change character as races get very long. The formula is a starting point — an honest, evidence-based goal — not a promise.</p>
+
+  <h3 class="text-2xl font-extrabold text-white mt-10">Why one exponent is not enough: distance-specific Riegel exponents</h3>
+  <p class="mt-4">The classic 1.06 is a compromise that averages across all distances, and averages lie at the extremes. Shorter races are more aerobic-efficient than the formula assumes, so predicting down — a 5K from a 10K — with 1.06 tends to be pessimistic. Ultras, on the other hand, punish runners harder than 1.06 predicts, because walking breaks, stomach issues, and muscular damage do not scale linearly. Coaches and researchers have repeatedly found that the exponent should rise with distance.</p>
+  <p class="mt-4">PaceCraft therefore uses distance-specific Riegel exponents. Predictions for 5K and shorter use 1.04, the 10K uses 1.05, the half marathon uses the classic 1.06, the marathon uses 1.07, and ultras climb to 1.10 for the 50K and 1.12 beyond. You can also lock the classic 1.06 for every distance if you prefer the textbook approach, or type a custom exponent between 1.00 and 1.25 to match your own experience. If your marathon history shows you fade more than the models expect, nudging the exponent up gives you a goal you can actually defend on race day.</p>
+
+  <h3 class="text-2xl font-extrabold text-white mt-10">Altitude changes everything: how elevation slows you down</h3>
+  <p class="mt-4">Thin air is the silent variable most race time predictor calculators ignore. Above roughly 1000 meters (about 3300 feet), the reduced partial pressure of oxygen lowers your VO2 max — the ceiling of your aerobic engine — and distance performance declines measurably. Exercise physiologists commonly cite a penalty of around 2 to 3 percent for every additional 1000 meters of elevation, once you are past that threshold. A marathoner who runs 3:30 at sea level might run closer to 3:40 at 2000 meters with identical fitness.</p>
+  <p class="mt-4">PaceCraft handles altitude on both ends of the comparison, which matters more than it sounds. If your recent race was at altitude, the tool first converts it to a sea-level equivalent before predicting — otherwise your fitness would be underestimated. Then it applies the target race's altitude factor to the prediction, so a sea-level 10K result correctly becomes a slower predicted time for a mountain half marathon. Enter both altitudes in meters or feet; anything at or below 1000 meters is treated as sea level, since the effect below that line is negligible for trained runners.</p>
+
+  <h3 class="text-2xl font-extrabold text-white mt-10">Negative-split planning: the pacing strategy of record-breakers</h3>
+  <p class="mt-4">Look at how world records fall and a pattern emerges: the second half is almost always faster than the first. A negative split — running the back half of a race quicker than the front — is the pacing strategy coaches preach because the physiology favors it. Starting a touch conservatively spares muscle glycogen, keeps core temperature and heart rate from spiking early, and leaves you with the reserves to run the late miles strongly while everyone who went out too hard is fading. Even pacing is good; a slight negative split is better; a big positive split is how personal bests die at mile 20.</p>
+  <p class="mt-4">The negative-split planner in PaceCraft turns that principle into numbers you can follow. Enter your goal distance and goal time, and it splits the race into first-half and second-half targets, defaulting to 50.8 percent of total time for the first half — roughly a 1.6 percent margin off even pace, the classic conservative-but-aggressive opening. A slider lets you push the first-half share up to 56 percent for a deliberately cautious start on a hilly course or a hot day. Each half comes with per-kilometer and per-mile paces, so whether your watch speaks metric or imperial, you know exactly what each half should feel like.</p>
+
+  <h3 class="text-2xl font-extrabold text-white mt-10">Printable pace bands: your race-day co-pilot</h3>
+  <p class="mt-4">A printable pace band generator solves the oldest problem in racing: holding your plan when adrenaline, crowds, and faster runners are pulling you off it. A pace band is a small strip printed with cumulative split times for every kilometer or mile of the race. Cut it out, tape it to your wrist or forearm, and at each course marker you glance down and compare: ahead of the printed elapsed time, you can relax a few seconds; behind it, you know precisely how much ground to reclaim. No mental arithmetic at mile 18, no guessing whether 7:42 pace "feels" right.</p>
+
+  <p class="mt-4">PaceCraft's marathon pace band calculator builds an even-pace schedule for any goal time and any distance, in kilometers or miles, and renders it as a table on screen plus a clean black-and-white wristband sheet for printing. The print stylesheet strips away everything except the bands themselves, so one click gives you a page of cut-out strips sized for a wrist — each showing the split number, the distance marker, the split time for that segment, and the cumulative elapsed time you should see on your watch. Print it the night before, tape it in the morning, and run your race instead of calculating it.</p>
+
+  <h3 class="text-2xl font-extrabold text-white mt-10">How to use PaceCraft: a step-by-step race-planning workflow</h3>
+  <p class="mt-4">Start with the race time predictor calculator. Pick the distance of your most recent hard effort — a race is better than a time trial, and recent is better than old — and type the time exactly as your results page shows it. The tool accepts formats like 24:36, 1:02:15, or even 1h2m15s. Add the altitude of that race and the altitude of the race you are targeting, choose your exponent mode, and hit predict. You will get nine predicted times, each with its per-kilometer and per-mile pace and the exponent used, so the math is never a black box.</p>
+  <p class="mt-4">Next, sanity-check the prediction against your training. A Riegel projection assumes your endurance is developed for the target distance — it cannot conjure marathon fitness out of 5K speed. If the predicted marathon looks ambitious compared to your long runs, treat it as a stretch goal and pick a conservative primary target a few percent slower. This is where the negative-split planner earns its keep: enter the goal you actually intend to run, set your first-half share, and memorize or print the two half targets and their paces.</p>
+  <p class="mt-4">Finally, generate your pace band. Choose the same goal distance and time, pick kilometers or miles to match how the course is marked, and print the wristband sheet. On race morning, tape the band to your wrist, and at every marker compare your watch to the printed elapsed time. If you planned a negative split, remember the band itself is an even-pace schedule — so aim to be a few seconds behind it in the first half and a few seconds ahead in the second. That is the whole system: predict honestly, split wisely, and wear the plan.</p>
+
+  <h3 class="text-2xl font-extrabold text-white mt-10">Understanding the limits of any prediction</h3>
+  <p class="mt-4">No calculator knows your training log. Riegel's formula assumes the fitness behind your input result transfers fully to the target distance, which is only true if you have done the work — the long runs for a marathon, the threshold sessions for a 10K. It also assumes similar courses and conditions: a flat, cool 10K predicts a hilly, humid half marathon poorly, and altitude correction handles elevation but not heat, wind, or a brutal course profile. Treat the prediction as the center of a range, not a single number carved in stone.</p>
+  <p class="mt-4">The input matters enormously. An all-out recent race gives the best predictions; a comfortable training run or a race where you jogged with a friend will produce soft targets. Likewise, a result from two years ago is a result from a different athlete. Use your freshest genuine effort, update the prediction as new races come in, and let the trend across several results tell you where your fitness really is.</p>
+
+  <h3 class="text-2xl font-extrabold text-white mt-10">Training takeaways: make the prediction come true</h3>
+  <p class="mt-4">A prediction is only as useful as the training behind it. If your target is longer than anything you have raced, the single most predictive workout is the long run: build it gradually to within 25 to 30 percent of the race distance for a marathon, and practice your goal pace inside those long runs so the effort feels familiar. If your target is shorter, threshold and interval sessions that lift your lactate threshold will move the Riegel line itself — run a faster 5K, and every prediction downstream gets faster too.</p>
+  <p class="mt-4">And on race day, trust the band more than the crowd. The runners sprinting past you in mile one are running their race, not yours. Your wristband holds the splits your fitness earned; your negative-split plan keeps powder dry for the miles that decide the result. PaceCraft does the arithmetic — you just have to do the running.</p>
+</article>
+
+<!-- ============ FAQS ============ -->
+<section class="mx-auto max-w-4xl px-4 sm:px-6 mt-12">
+  <h2 class="text-2xl font-extrabold text-white">Frequently Asked Questions</h2>
+  <div class="mt-5 space-y-3">
+    <details class="faq">
+      <summary class="flex items-center justify-between gap-4 px-5 py-4 font-bold text-white">What is the Riegel formula used by this race time predictor calculator? <span class="faq-plus text-2xl leading-none">+</span></summary>
+      <p class="px-5 pb-5 text-gray-400 text-sm">The Riegel formula is T2 = T1 × (D2/D1)^1.06: your predicted time equals a known time multiplied by the distance ratio raised to 1.06. Published by Peter Riegel in 1977 from world-record data, it models how sustainable pace decays with distance. PaceCraft refines it with distance-specific exponents — 1.04 for 5K and shorter up to 1.12 for ultras — since longer races slow runners more than the classic single exponent assumes.</p>
+    </details>
+    <details class="faq">
+      <summary class="flex items-center justify-between gap-4 px-5 py-4 font-bold text-white">How accurate is a race time prediction from one recent result? <span class="faq-plus text-2xl leading-none">+</span></summary>
+      <p class="px-5 pb-5 text-gray-400 text-sm">For trained runners on similar courses, Riegel predictions are usually within 2–4% for nearby distances (e.g. 10K from 5K). Accuracy drops when extrapolating far — a marathon from a 5K — because endurance and fueling differ across distances. Use your freshest all-out race as input, and sanity-check the target against your training volume.</p>
+    </details>
+    <details class="faq">
+      <summary class="flex items-center justify-between gap-4 px-5 py-4 font-bold text-white">How does altitude change my predicted race time? <span class="faq-plus text-2xl leading-none">+</span></summary>
+      <p class="px-5 pb-5 text-gray-400 text-sm">Above about 1000 meters, thinner air cuts your aerobic capacity by roughly 2–3% per extra 1000 meters. PaceCraft applies a 2.4% slowdown per 1000 m above that threshold — first converting an altitude recent race to its sea-level equivalent, then applying the target race's altitude factor, so both ends of the comparison are corrected.</p>
+    </details>
+    <details class="faq">
+      <summary class="flex items-center justify-between gap-4 px-5 py-4 font-bold text-white">What is a printable pace band and how do I use it in a race? <span class="faq-plus text-2xl leading-none">+</span></summary>
+      <p class="px-5 pb-5 text-gray-400 text-sm">A pace band is a wristband printed with cumulative split times for every kilometer or mile. Tape it to your wrist and at each course marker compare your watch to the printed elapsed time — ahead means ease off, behind means make up the gap. PaceCraft's print stylesheet produces a clean black-and-white wristband sheet you can cut out and wear.</p>
+    </details>
+    <details class="faq">
+      <summary class="flex items-center justify-between gap-4 px-5 py-4 font-bold text-white">What is negative-split pacing and why do runners use it? <span class="faq-plus text-2xl leading-none">+</span></summary>
+      <p class="px-5 pb-5 text-gray-400 text-sm">A negative split means running the second half faster than the first — the strategy behind most world records. Starting slightly conservatively spares glycogen and keeps you strong late. PaceCraft defaults to 50.8% of total time for the first half and shows per-km and per-mile paces for each half.</p>
+    </details>
+    <details class="faq">
+      <summary class="flex items-center justify-between gap-4 px-5 py-4 font-bold text-white">Is PaceCraft free to use? <span class="faq-plus text-2xl leading-none">+</span></summary>
+      <p class="px-5 pb-5 text-gray-400 text-sm">Yes — completely free with unlimited usage. No signup, no paywall, no watermark, and no limits on predictions or pace bands. All calculations run in your browser, so your race data never leaves your device.</p>
+    </details>
+  </div>
+</section>
+
+<footer class="mx-auto max-w-6xl px-4 sm:px-6 mt-14 pb-10">
+  <div class="checker checker-sm h-2 w-full rounded mb-6" aria-hidden="true"></div>
+  <p class="text-center text-xs text-gray-600">PaceCraft — free race time predictor calculator, printable pace band generator, and negative-split planner. Predictions are estimates for training and race planning, not guarantees.</p>
+</footer>
+
+</div><!-- /#app -->
+
+<!-- print-only wristband sheet -->
+<div id="print-sheet" class="print-only"></div>
+
+<script id="v3-pacecraft-race-predictor-lib">
+'use strict';
+/* PaceCraft — Riegel race-time predictor engine (pure logic, no DOM).
+ * Implements: Riegel prediction T2 = T1 * (D2/D1)^exp with
+ * distance-specific exponents, altitude adjustment, negative-split
+ * planning, and printable pace-band split generation. */
+
+var DISTANCES = [
+  { key: 'mile',     label: '1 Mile',        m: 1609.344 },
+  { key: '5k',       label: '5K',            m: 5000 },
+  { key: '10k',      label: '10K',           m: 10000 },
+  { key: '10mi',     label: '10 Miles',      m: 16093.44 },
+  { key: 'hm',       label: 'Half Marathon', m: 21097.5 },
+  { key: 'marathon', label: 'Marathon',      m: 42195 },
+  { key: '50k',      label: '50K',           m: 50000 },
+  { key: '50mi',     label: '50 Miles',      m: 80467.2 },
+  { key: '100k',     label: '100K',          m: 100000 }
+];
+
+var RIEGEL_CLASSIC = 1.06;
+var ALTITUDE_THRESHOLD_M = 1000; // no measurable effect below this elevation
+var ALTITUDE_RATE = 0.024;       // ~2.4% slowdown per 1000 m above threshold
+var FT_PER_M = 3.28084;
+var MI_PER_KM = 0.621371;
+
+/**
+ * Find a known distance entry by key. Returns the entry or null.
+ */
+function distanceByKey(key) {
+  if (!key) return null;
+  for (var i = 0; i < DISTANCES.length; i++) {
+    if (DISTANCES[i].key === key) return DISTANCES[i];
+  }
+  return null;
+}
+
+/**
+ * Parse a time string into seconds. Accepts "1:23:45", "23:45", "45",
+ * "1h23m45s", "23m45s", "45s", "1.5h". Returns seconds (number >= 0)
+ * or null when unparsable. Never throws.
+ */
+function parseTime(str) {
+  if (str === null || str === undefined) return null;
+  if (typeof str === 'number') {
+    if (!isFinite(str) || str < 0) return null;
+    return str;
+  }
+  var s = String(str).trim();
+  if (s === '') return null;
+  s = s.replace(/,/g, '.');
+  // h/m/s suffix style: "1h23m45s"
+  var hms = /^(\d+(?:\.\d+)?)h\s*(\d+(?:\.\d+)?)m\s*(\d+(?:\.\d+)?)s$/i.exec(s)
+       || /^(\d+(?:\.\d+)?)h\s*(\d+(?:\.\d+)?)m$/i.exec(s)
+       || /^(\d+(?:\.\d+)?)m\s*(\d+(?:\.\d+)?)s$/i.exec(s)
+       || /^(\d+(?:\.\d+)?)h$/i.exec(s)
+       || /^(\d+(?:\.\d+)?)m$/i.exec(s)
+       || /^(\d+(?:\.\d+)?)s$/i.exec(s);
+  if (hms) {
+    var parts = hms.slice(1).filter(function (x) { return x !== undefined; });
+    var unit = (hms[0].toLowerCase().indexOf('h') !== -1) ? 'h'
+             : (hms[0].toLowerCase().indexOf('m') !== -1 && parts.length > 1 ? 'm' : 's');
+    var total = 0;
+    if (unit === 'h') {
+      total = parseFloat(parts[0]) * 3600
+            + (parts[1] !== undefined ? parseFloat(parts[1]) * 60 : 0)
+            + (parts[2] !== undefined ? parseFloat(parts[2]) : 0);
+    } else if (unit === 'm') {
+      total = parseFloat(parts[0]) * 60
+            + (parts[1] !== undefined ? parseFloat(parts[1]) : 0);
+    } else {
+      total = parseFloat(parts[0]);
+    }
+    if (!isFinite(total) || total < 0) return null;
+    return total;
+  }
+  // colon style: "1:23:45" / "23:45" / "45"
+  if (/^[0-9]+(?::[0-9]+){0,2}(?:\.\d+)?$/.test(s)) {
+    var p = s.split(':');
+    var secs = 0;
+    for (var i = 0; i < p.length; i++) {
+      secs = secs * 60 + parseFloat(p[i]);
+    }
+    if (!isFinite(secs) || secs < 0) return null;
+    return secs;
+  }
+  return null;
+}
+
+/**
+ * Format seconds as "H:MM:SS" or "M:SS". Handles non-finite by
+ * returning "—". Never throws.
+ */
+function fmtTime(seconds) {
+  if (seconds === null || seconds === undefined || !isFinite(seconds)) return '—';
+  var s = Math.max(0, Math.round(seconds));
+  var h = Math.floor(s / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  var sec = s % 60;
+  var mm = (h > 0 && m < 10 ? '0' : '') + m;
+  var ss = (sec < 10 ? '0' : '') + sec;
+  return (h > 0 ? h + ':' + mm + ':' + ss : m + ':' + ss);
+}
+
+/**
+ * Format a pace (seconds per unit distance) as "M:SS /km" or "M:SS /mi".
+ */
+function fmtPace(secPerUnit, unit) {
+  if (secPerUnit === null || secPerUnit === undefined || !isFinite(secPerUnit) || secPerUnit <= 0) return '—';
+  return fmtTime(secPerUnit) + ' /' + (unit === 'mi' ? 'mi' : 'km');
+}
+
+/**
+ * Validate a (distance, time) race pair. Returns { distanceM, timeS }
+ * or null when anything is invalid. A zero time is valid here but
+ * predictions made from it collapse to zero (see predictTime).
+ */
+function sanitizeRace(distanceM, timeS) {
+  var d = Number(distanceM);
+  var t = Number(timeS);
+  if (!isFinite(d) || d <= 0 || d > 1000000) return null;
+  if (!isFinite(t) || t < 0 || t > 7 * 24 * 3600) return null;
+  return { distanceM: d, timeS: t };
+}
+
+/**
+ * Distance-specific Riegel exponent. The classic 1.06 is a compromise;
+ * research and coaching practice show faster decay for longer races.
+ * Band lookup on the TARGET distance keeps predictions honest.
+ */
+function distanceExponent(targetM) {
+  var d = Number(targetM);
+  if (!isFinite(d) || d <= 0) return RIEGEL_CLASSIC;
+  if (d <= 5000) return 1.04;
+  if (d <= 10000) return 1.05;
+  if (d <= 22000) return 1.06;
+  if (d <= 42195) return 1.07;
+  if (d <= 100000) return 1.10;
+  return 1.12;
+}
+
+/**
+ * Resolve which exponent to use: 'classic' | 'distance' | number.
+ * A numeric custom exponent is clamped to [1.0, 1.25].
+ */
+function resolveExponent(mode, customExp, targetM) {
+  if (mode === 'custom' && typeof customExp === 'number' && isFinite(customExp)) {
+    return Math.max(1.0, Math.min(1.25, customExp));
+  }
+  if (typeof mode === 'number' && isFinite(mode)) {
+    return Math.max(1.0, Math.min(1.25, mode));
+  }
+  if (mode === 'classic') return RIEGEL_CLASSIC;
+  return distanceExponent(targetM);
+}
+
+/**
+ * Riegel prediction: T2 = T1 * (D2/D1)^exponent.
+ * Returns predicted seconds, or null for invalid inputs.
+ * A zero T1 predicts zero (graceful, no NaN/Infinity).
+ */
+function predictTime(t1Seconds, d1Meters, d2Meters, exponent) {
+  var r = sanitizeRace(d1Meters, t1Seconds);
+  if (!r) return null;
+  var d2 = Number(d2Meters);
+  var exp = Number(exponent);
+  if (!isFinite(d2) || d2 <= 0 || d2 > 1000000) return null;
+  if (!isFinite(exp) || exp <= 0) return null;
+  return r.timeS * Math.pow(d2 / r.distanceM, exp);
+}
+
+/**
+ * Predict every standard race distance from one recent result.
+ * mode: 'classic' | 'distance' | numeric exponent.
+ * Returns an array of { key, label, m, predictedS, exponent }.
+ */
+function predictAll(t1Seconds, d1Meters, mode, customExp) {
+  var results = [];
+  for (var i = 0; i < DISTANCES.length; i++) {
+    var d = DISTANCES[i];
+    var exp = resolveExponent(mode, customExp, d.m);
+    results.push({
+      key: d.key,
+      label: d.label,
+      m: d.m,
+      exponent: exp,
+      predictedS: predictTime(t1Seconds, d1Meters, d.m, exp)
+    });
+  }
+  return results;
+}
+
+/**
+ * Altitude slowdown factor for a race at altitudeM meters.
+ * 1.0 at/below 1000 m, then ~2.4% per extra 1000 m.
+ */
+function altitudeFactor(altitudeM) {
+  var a = Number(altitudeM);
+  if (!isFinite(a) || a <= ALTITUDE_THRESHOLD_M) return 1;
+  return 1 + ALTITUDE_RATE * ((a - ALTITUDE_THRESHOLD_M) / 1000);
+}
+
+/**
+ * Convert a time run AT altitude to its sea-level equivalent
+ * (used when the recent race was at altitude).
+ */
+function seaLevelEquivalent(timeS, altitudeM) {
+  var t = Number(timeS);
+  if (!isFinite(t) || t < 0) return null;
+  return t / altitudeFactor(altitudeM);
+}
+
+/**
+ * Convert a sea-level equivalent time to the time you would run
+ * AT altitudeM (used when the target race is at altitude).
+ */
+function altitudeAdjusted(seaLevelS, altitudeM) {
+  var t = Number(seaLevelS);
+  if (!isFinite(t) || t < 0) return null;
+  return t * altitudeFactor(altitudeM);
+}
+
+/**
+ * Full pipeline: predict target times, correcting for altitude on
+ * both the recent race (normalize to sea level) and the target race
+ * (apply target altitude). Altitudes in meters.
+ * mode: 'classic' | 'distance' | numeric exponent.
+ */
+function predictWithAltitude(t1Seconds, d1Meters, recentAltM, targetAltM, mode, customExp) {
+  var sea = seaLevelEquivalent(t1Seconds, recentAltM);
+  if (sea === null) return null;
+  var targetFactor = altitudeFactor(targetAltM);
+  return predictAll(sea, d1Meters, mode, customExp).map(function (row) {
+    return {
+      key: row.key,
+      label: row.label,
+      m: row.m,
+      exponent: row.exponent,
+      predictedS: row.predictedS === null ? null : row.predictedS * targetFactor,
+      seaLevelS: row.predictedS
+    };
+  });
+}
+
+/**
+ * Negative-split planner: split totalS into first/second halves.
+ * firstHalfPct (default 0.508) = share of total time for the first half;
+ * values > 0.5 mean the first half is run slower (classic negative split).
+ * Returns half times plus per-km and per-mile paces for each half.
+ */
+function negativeSplitPlan(totalS, distanceM, firstHalfPct) {
+  var t = Number(totalS);
+  var d = Number(distanceM);
+  var p = (typeof firstHalfPct === 'number' && isFinite(firstHalfPct)) ? firstHalfPct : 0.508;
+  if (!isFinite(t) || t <= 0 || !isFinite(d) || d <= 0) return null;
+  p = Math.max(0.45, Math.min(0.60, p));
+  var halfD = d / 2;
+  var t1 = t * p;
+  var t2 = t - t1;
+  var km1 = halfD / 1000, mi1 = halfD / 1609.344;
+  return {
+    firstHalfPct: p,
+    half1S: t1,
+    half2S: t2,
+    half1KmS: t1 / km1,
+    half2KmS: t2 / km1,
+    half1MiS: t1 / mi1,
+    half2MiS: t2 / mi1,
+    half1Label: fmtTime(t1),
+    half2Label: fmtTime(t2),
+    half1PaceKm: fmtPace(t1 / km1, 'km'),
+    half2PaceKm: fmtPace(t2 / km1, 'km'),
+    half1PaceMi: fmtPace(t1 / mi1, 'mi'),
+    half2PaceMi: fmtPace(t2 / mi1, 'mi')
+  };
+}
+
+/**
+ * Build split rows for a target race: every `splitEvery` units
+ * (1 km or 1 mi) plus the finish. Constant-pace schedule.
+ * Returns [{ n, cumDist, cumDistLabel, splitS, cumS, splitLabel, cumLabel }].
+ */
+function paceBandRows(totalS, distanceM, unit, splitEvery) {
+  var t = Number(totalS);
+  var d = Number(distanceM);
+  if (!isFinite(t) || t <= 0 || !isFinite(d) || d <= 0) return [];
+  var u = (unit === 'mi') ? 'mi' : 'km';
+  var unitM = (u === 'mi') ? 1609.344 : 1000;
+  var every = (typeof splitEvery === 'number' && isFinite(splitEvery) && splitEvery > 0) ? splitEvery : 1;
+  var perUnitS = t / (d / unitM);
+  var totalUnits = d / unitM;
+  var rows = [];
+  var cumUnits = 0;
+  var n = 0;
+  while (cumUnits + every < totalUnits - 1e-6) {
+    cumUnits += every;
+    n++;
+    var cumS = perUnitS * cumUnits;
+    var disp = (Math.abs(cumUnits - Math.round(cumUnits)) < 0.01)
+      ? String(Math.round(cumUnits))
+      : cumUnits.toFixed(1);
+    rows.push({
+      n: n,
+      cumDist: cumUnits,
+      cumDistLabel: disp + ' ' + u,
+      splitS: perUnitS * every,
+      cumS: cumS,
+      splitLabel: fmtTime(perUnitS * every),
+      cumLabel: fmtTime(cumS)
+    });
+  }
+  // finish row (may be a partial split)
+  var splitUnits = totalUnits - cumUnits;
+  n++;
+  rows.push({
+    n: n,
+    cumDist: totalUnits,
+    cumDistLabel: totalUnits.toFixed(2) + ' ' + u,
+    splitS: perUnitS * splitUnits,
+    cumS: t,
+    splitLabel: fmtTime(perUnitS * splitUnits),
+    cumLabel: fmtTime(t)
+  });
+  return rows;
+}
+
+/**
+ * Chunk split rows into printable wristband bands of perBand rows each.
+ * Returns an array of bands; each band is an array of rows.
+ */
+function chunkBands(rows, perBand) {
+  var b = Math.max(1, Math.floor(Number(perBand) || 10));
+  var bands = [];
+  for (var i = 0; i < rows.length; i += b) {
+    bands.push(rows.slice(i, i + b));
+  }
+  return bands;
+}
+
+/**
+ * One-call bundle the UI needs for the printable sheet:
+ * negative-split-aware band rows for the goal time.
+ */
+function bandBundle(totalS, distanceM, unit) {
+  var rows = paceBandRows(totalS, distanceM, unit, 1);
+  return {
+    rows: rows,
+    bands: chunkBands(rows, 10),
+    totalS: totalS,
+    totalLabel: fmtTime(totalS),
+    paceKm: fmtPace(totalS / (distanceM / 1000), 'km'),
+    paceMi: fmtPace(totalS / (distanceM / 1609.344), 'mi')
+  };
+}
+
+</script>
+<script>
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  // populate distance selects
+  var distOpts = DISTANCES.map(function (d) {
+    return '<option value="' + d.key + '">' + d.label + '</option>';
+  }).join('');
+  ['race-dist', 'split-dist', 'band-dist'].forEach(function (id, i) {
+    $(id).innerHTML = distOpts + '<option value="custom">Custom…</option>';
+    $(id).value = ['5k', 'marathon', 'marathon'][i];
+  });
+
+  function selectedDistance(selId, customId) {
+    var key = $(selId).value;
+    if (key === 'custom') {
+      var customEl = customId ? $(customId) : null;
+      if (!customEl) return null;
+      var m = Number(customEl.value);
+      if (!isFinite(m) || m < 100 || m > 1000000) return null;
+      return { key: 'custom', label: 'Custom (' + Math.round(m) + ' m)', m: m };
+    }
+    return distanceByKey(key);
+  }
+
+  function showError(id, msg) {
+    var el = $(id);
+    if (msg) { el.textContent = msg; el.classList.remove('hidden'); }
+    else { el.classList.add('hidden'); }
+  }
+
+  // ---------- 1. predictor ----------
+  $('race-dist').addEventListener('change', function () {
+    $('race-dist-custom-wrap').classList.toggle('hidden', $('race-dist').value !== 'custom');
+  });
+  $('exp-mode').addEventListener('change', function () {
+    $('exp-custom-wrap').classList.toggle('hidden', $('exp-mode').value !== 'custom');
+  });
+
+  $('predict-btn').addEventListener('click', function () {
+    showError('predict-error', null);
+    var dist = selectedDistance('race-dist', 'race-dist-custom');
+    var t = parseTime($('race-time').value);
+    if (!dist) { showError('predict-error', 'Please enter a valid custom distance (100–1,000,000 m).'); return; }
+    if (t === null || t <= 0) { showError('predict-error', 'Please enter a valid recent race time, e.g. 24:36 or 1:02:15.'); return; }
+    var altU = $('alt-unit').value;
+    var toM = (altU === 'ft') ? function (v) { return v / FT_PER_M; } : function (v) { return v; };
+    var recentAlt = toM(Number($('recent-alt').value) || 0);
+    var targetAlt = toM(Number($('target-alt').value) || 0);
+    var mode = $('exp-mode').value;
+    var customExp = Number($('exp-custom').value);
+    var rows = predictWithAltitude(t, dist.m, recentAlt, targetAlt, mode === 'custom' ? customExp : mode, customExp);
+    if (!rows) { showError('predict-error', 'Could not compute predictions from that input.'); return; }
+    var sameKey = dist.key;
+    var html = rows.map(function (r) {
+      var highlight = (r.key === sameKey) ? 'border-[#FACC15]' : '';
+      var paceKm = fmtPace(r.predictedS / (r.m / 1000), 'km');
+      var paceMi = fmtPace(r.predictedS / (r.m / 1609.344), 'mi');
+      return '<div class="card card-red p-5 ' + highlight + '">' +
+        '<div class="text-xs font-bold uppercase tracking-widest text-gray-500">' + esc(r.label) + '</div>' +
+        '<div class="bigtime text-3xl font-black text-white mt-2">' + fmtTime(r.predictedS) + '</div>' +
+        '<div class="text-xs text-gray-400 mt-2">' + paceKm + ' · ' + paceMi + '</div>' +
+        '<div class="text-[10px] text-gray-600 mt-1 uppercase tracking-widest">exponent ' + r.exponent.toFixed(2) + '</div>' +
+      '</div>';
+    }).join('');
+    $('pred-results').innerHTML = html;
+    $('pred-results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  // ---------- 2. negative split ----------
+  var pct = $('split-pct');
+  pct.addEventListener('input', function () {
+    $('split-pct-val').textContent = Number(pct.value).toFixed(1) + '%';
+  });
+  $('split-btn').addEventListener('click', function () {
+    showError('split-error', null);
+    var dist = selectedDistance('split-dist', null);
+    var t = parseTime($('split-time').value);
+    if (!dist) { showError('split-error', 'Please choose a goal distance.'); return; }
+    if (t === null || t <= 0) { showError('split-error', 'Please enter a valid goal time, e.g. 3:59:59.'); return; }
+    var plan = negativeSplitPlan(t, dist.m, Number(pct.value) / 100);
+    if (!plan) { showError('split-error', 'Could not build a split plan from that input.'); return; }
+    $('split-results').innerHTML =
+      '<div class="card card-gold p-6">' +
+        '<div class="text-xs font-bold uppercase tracking-widest text-gray-500">First half — controlled start</div>' +
+        '<div class="bigtime text-3xl font-black text-[#FACC15] mt-2">' + plan.half1Label + '</div>' +
+        '<div class="text-sm text-gray-400 mt-2">' + plan.half1PaceKm + ' · ' + plan.half1PaceMi + '</div>' +
+        '<div class="text-xs text-gray-500 mt-1">' + (plan.firstHalfPct * 100).toFixed(1) + '% of total time</div>' +
+      '</div>' +
+      '<div class="card card-red p-6">' +
+        '<div class="text-xs font-bold uppercase tracking-widest text-gray-500">Second half — bring it home</div>' +
+        '<div class="bigtime text-3xl font-black text-[#EF4444] mt-2">' + plan.half2Label + '</div>' +
+        '<div class="text-sm text-gray-400 mt-2">' + plan.half2PaceKm + ' · ' + plan.half2PaceMi + '</div>' +
+        '<div class="text-xs text-gray-500 mt-1">' + ((1 - plan.firstHalfPct) * 100).toFixed(1) + '% of total time</div>' +
+      '</div>';
+  });
+
+  // ---------- 3. pace bands ----------
+  $('band-btn').addEventListener('click', function () {
+    showError('band-error', null);
+    var dist = distanceByKey($('band-dist').value === 'custom' ? '' : $('band-dist').value);
+    if (!dist) { showError('band-error', 'Please choose a race distance.'); return; }
+    var t = parseTime($('band-time').value);
+    if (t === null || t <= 0) { showError('band-error', 'Please enter a valid goal time, e.g. 1:45:00.'); return; }
+    var unit = $('band-unit').value;
+    var bundle = bandBundle(t, dist.m, unit);
+    $('band-goal-label').textContent = bundle.totalLabel;
+    $('band-pace-label').textContent = dist.label + ' · ' + bundle.paceKm + ' · ' + bundle.paceMi;
+    $('band-summary').classList.remove('hidden');
+    $('band-table').classList.remove('hidden');
+    $('band-rows').innerHTML = bundle.rows.map(function (r) {
+      return '<tr class="border-b border-[#1d1d24]">' +
+        '<td class="py-2 pr-4 text-gray-500">' + r.n + '</td>' +
+        '<td class="py-2 pr-4">' + esc(r.cumDistLabel) + '</td>' +
+        '<td class="py-2 pr-4 text-[#FACC15]">' + r.splitLabel + '</td>' +
+        '<td class="py-2 text-white font-bold">' + r.cumLabel + '</td>' +
+      '</tr>';
+    }).join('');
+    // print sheet
+    $('print-sheet').innerHTML =
+      '<h1 style="font-family:sans-serif">PaceCraft pace band — ' + esc(dist.label) + ' · goal ' + bundle.totalLabel + '</h1>' +
+      '<p style="font-family:sans-serif;font-size:12px">Even pace: ' + bundle.paceKm + ' · ' + bundle.paceMi + '. Cut along the borders and tape to your wrist.</p>' +
+      bundle.bands.map(function (band, bi) {
+        return '<div class="bandcard">' +
+          '<table><thead><tr><th>#</th><th>Distance</th><th>Split</th><th>Elapsed</th></tr></thead><tbody>' +
+          band.map(function (r) {
+            return '<tr><td>' + r.n + '</td><td>' + esc(r.cumDistLabel) + '</td><td>' + r.splitLabel + '</td><td><b>' + r.cumLabel + '</b></td></tr>';
+          }).join('') +
+          '</tbody></table></div>';
+      }).join('');
+  });
+
+  $('print-bands-btn').addEventListener('click', function () {
+    window.print();
+  });
+})();
+</script>
+</body>
+</html>
